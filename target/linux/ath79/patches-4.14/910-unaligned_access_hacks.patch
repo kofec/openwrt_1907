@@ -737,7 +737,7 @@
  EXPORT_SYMBOL(xfrm_parse_spi);
 --- a/net/ipv4/tcp_input.c
 +++ b/net/ipv4/tcp_input.c
-@@ -3915,14 +3915,16 @@ static bool tcp_parse_aligned_timestamp(
+@@ -3920,14 +3920,16 @@ static bool tcp_parse_aligned_timestamp(
  {
  	const __be32 *ptr = (const __be32 *)(th + 1);
  
