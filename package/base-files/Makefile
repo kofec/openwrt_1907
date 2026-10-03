@@ -99,6 +99,7 @@ ifeq ($(CONFIG_TARGET_DEFAULT_LAN_IP_FROM_PREINIT),y)
 	echo 'json_select ..' >>$(1)/etc/board.d/99-lan-ip
 	echo 'json_select ..' >>$(1)/etc/board.d/99-lan-ip
 	echo 'board_config_flush' >>$(1)/etc/board.d/99-lan-ip
+	chmod 0755 $(1)/etc/board.d/99-lan-ip
 endif
 endef
 
