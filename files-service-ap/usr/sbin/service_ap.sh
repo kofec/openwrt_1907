@@ -7,9 +7,9 @@
 # odhcpd hands out addresses. AP and STA share one radio, and an AP on a
 # radio with an unconnected STA never comes up, so the STA has to go.
 #
-# The service AP stays on while any station is associated with it, and for
-# <service_time> seconds after the last one leaves. Then the saved wifi
-# clients are re-enabled and the uplink is tried again.
+# The service AP stays on for <service_time> seconds, whether or not anyone
+# is connected. Then the saved wifi clients are re-enabled and the uplink is
+# tried again; after another <timeout> seconds without uplink the AP returns.
 #
 # Config: /etc/config/service_ap. Wifi clients turned off for the service
 # mode are listed in /etc/service_ap.sta (survives a reboot in service mode).
@@ -85,16 +85,6 @@ uplink_ok() {
 	[ -n "$gw" ] && ping -c 1 -W 3 "$gw" >/dev/null 2>&1
 }
 
-ap_stations() {
-	local dev n=0 c
-	for dev in $(iw dev | awk '/Interface/{print $2}'); do
-		iw dev "$dev" info 2>/dev/null | grep -q 'type AP' || continue
-		c="$(iw dev "$dev" station dump 2>/dev/null | grep -c '^Station')"
-		n=$((n + c))
-	done
-	echo "$n"
-}
-
 travelmate() {
 	[ -x /etc/init.d/travelmate ] || return 0
 	case "$1" in
@@ -131,17 +121,8 @@ ap_off() {
 }
 
 service_mode() {
-	local left=$service_time st
 	ap_on
-	while [ "$left" -gt 0 ]; do
-		sleep $INTERVAL
-		st="$(ap_stations)"
-		if [ "$st" -gt 0 ]; then
-			left=$service_time
-		else
-			left=$((left - INTERVAL))
-		fi
-	done
+	sleep "$service_time"
 	ap_off
 }
 
