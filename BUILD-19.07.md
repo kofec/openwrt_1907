@@ -65,7 +65,7 @@ selected in a full `.config` even after nothing needs them any more.
 - `ath79/tiny`, `tplink_tl-wr741-v1`
 - LuCI with statistics (collectd + rrdtool) and watchcat
 - WireGuard (`kmod-wireguard`, `wireguard-tools`, `luci-proto-wireguard`)
-- relayd, odhcpd as DHCP server, travelmate
+- relayd, odhcpd as DHCP server, travelmate with its LuCI app
 - with [files-service-ap](#service-ap-fallback-files-service-ap) copied to
   `files/`: service AP fallback
 - no IPv6, no firewall/iptables, no dnsmasq, no ppp, no opkg
@@ -83,6 +83,11 @@ Space saving tricks used there:
 
 Result on TL-WR741ND v1: squashfs 2.40 MB -> 2.29 MB, overlay 320 KiB ->
 448 KiB, with travelmate and the service AP script included.
+`luci-app-travelmate` adds ~47 KB (in 19.07 it is still Lua/CBI and needs
+`luci-compat`), which costs one erase block: 384 KiB overlay in the
+example diffconfig. The JavaScript version from 21.02+ does not need
+`luci-compat`, but it only works with travelmate 2.x, which depends on
+`curl` and `ca-bundle` - more than the Lua app saves.
 
 ### How much flash is left
 
@@ -121,9 +126,10 @@ service that opens a service AP in that case:
 3. odhcpd serves DHCP on `lan` (default for a static lan when dnsmasq is
    not installed: `dhcp.odhcpd.maindhcp=1`, `dhcp.lan.dhcpv4=server`), so a
    laptop or phone gets an address and can open LuCI / ssh on the lan IP.
-4. The AP stays on while a station is associated and `service_time`
-   seconds (default 600) after the last one leaves; then the STA
-   interfaces are restored and travelmate started again (if enabled).
+4. After `service_time` seconds (default 600) the AP goes off whether or
+   not anyone is connected, the STA interfaces are restored and travelmate
+   started again (if enabled). With no uplink the cycle repeats: 3 minutes
+   searching, 10 minutes service AP.
 
 The disabled STA list is kept in `/etc/service_ap.sta`, so a reboot in
 service mode restores the clients first.
