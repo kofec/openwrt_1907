@@ -39,7 +39,7 @@ docker run --interactive --rm --tty --ulimit 'nofile=1024:262144' \
   --volume "$(pwd):/workdir" --workdir '/workdir' openwrt:alpine /bin/bash
 
 # inside the container
-cp diffconfig_wr741ndv1_1907_dhcp_travelmate .config
+cp diffconfig_wr741ndv1_1907 .config
 make defconfig
 make download
 make -j"$(nproc)"
@@ -59,18 +59,34 @@ Always start from a diffconfig (`cp diffconfig_... .config`), not from an
 old full `.config`: packages that were only pulled in as dependencies stay
 selected in a full `.config` even after nothing needs them any more.
 
-## Example: TL-WR741ND v1, 4 MB flash
+## Profiles: one per model, 4 MB flash / 32 MB RAM
 
-[diffconfig_wr741ndv1_1907_dhcp_travelmate](diffconfig_wr741ndv1_1907_dhcp_travelmate)
-- `ath79/tiny`, `tplink_tl-wr741-v1`
+All `ath79/tiny` TP-Link boards share one package profile; the diffconfigs
+differ only in the device line (and the `_bonding` / `_vxlan` extras).
+
 - LuCI with statistics (collectd + rrdtool) and watchcat
 - WireGuard (`kmod-wireguard`, `wireguard-tools`, `luci-proto-wireguard`)
 - relayd, odhcpd as DHCP server, travelmate with its LuCI app
+- Wake-on-LAN (`etherwake`, `luci-app-wol`)
 - with [files-service-ap](#service-ap-fallback-files-service-ap) copied to
   `files/`: service AP fallback
 - no IPv6, no firewall/iptables, no dnsmasq, no ppp, no opkg
 - default lan address 192.168.2.1 (also failsafe), only after first boot
   or factory reset - see below
+
+| diffconfig | Device | SoC | Overlay |
+|---|---|---|---|
+| [diffconfig_wr741ndv1_1907](diffconfig_wr741ndv1_1907) | TL-WR741ND v1 | ar7240 | 384 KiB |
+| [diffconfig_wr740nv1v2_1907](diffconfig_wr740nv1v2_1907) | TL-WR740N v1/v2 | ar7240 | 384 KiB |
+| [diffconfig_wr741ndv4_1907](diffconfig_wr741ndv4_1907) | TL-WR741ND v4 | ar9331 | 384 KiB |
+| [diffconfig_wr740nv4_1907](diffconfig_wr740nv4_1907) | TL-WR740N v4 | ar9331 | 384 KiB |
+| [diffconfig_wr841nv9_1907](diffconfig_wr841nv9_1907) | TL-WR841N v9 | qca9533 | 384 KiB |
+| [diffconfig_wr841nv11_1907](diffconfig_wr841nv11_1907) | TL-WR841N v11 | qca9533 | 384 KiB |
+| [diffconfig_wr741ndv1_1907_vxlan](diffconfig_wr741ndv1_1907_vxlan) | TL-WR741ND v1 + vxlan | ar7240 | 384 KiB |
+| [diffconfig_wr740nv1v2_1907_vxlan](diffconfig_wr740nv1v2_1907_vxlan) | TL-WR740N v1/v2 + vxlan | ar7240 | 384 KiB |
+| [diffconfig_wr741ndv1_1907_bonding](diffconfig_wr741ndv1_1907_bonding) | TL-WR741ND v1 + bonding | ar7240 | 320 KiB |
+| [diffconfig_wr740nv1v2_1907_bonding](diffconfig_wr740nv1v2_1907_bonding) | TL-WR740N v1/v2 + bonding | ar7240 | 320 KiB |
+| [diffconfig_wr741ndv4_1907_bonding](diffconfig_wr741ndv4_1907_bonding) | TL-WR741ND v4 + bonding | ar9331 | 320 KiB |
 
 Space saving tricks used there:
 - `# CONFIG_IPV6 is not set`, `# CONFIG_KERNEL_IPV6 is not set`
@@ -86,30 +102,31 @@ Space saving tricks used there:
 Result on TL-WR741ND v1: squashfs 2.40 MB -> 2.29 MB, overlay 320 KiB ->
 448 KiB, with travelmate and the service AP script included.
 `luci-app-travelmate` adds ~47 KB (in 19.07 it is still Lua/CBI and needs
-`luci-compat`), which costs one erase block: 384 KiB overlay in the
-example diffconfig. The JavaScript version from 21.02+ does not need
-`luci-compat`, but it only works with travelmate 2.x, which depends on
-`curl` and `ca-bundle` - more than the Lua app saves.
+`luci-compat`), which costs one erase block: 384 KiB. The JavaScript
+version from 21.02+ does not need `luci-compat`, but it only works with
+travelmate 2.x, which depends on `curl` and `ca-bundle` - more than the
+Lua app saves. Bonding costs another block (320 KiB).
 
 ### How much flash is left
 
-On 4 MB TP-Link devices the firmware partition is 3904 KiB. The squashfs
-rootfs is padded to a 64 KiB erase block and everything after it becomes
-the JFFS2 overlay (`rootfs_data`) for configuration. With JFFS2 reserving
-blocks for garbage collection, an overlay of 256 KiB is practically full
-right after first boot; aim for 320 KiB or more.
+On 4 MB TP-Link devices the firmware partition is 3904 KiB (3997696 B).
+The image is header + kernel + squashfs (right after the kernel, not
+block aligned), padded to a 64 KiB erase block and terminated with the
+`deadc0de` JFFS2 marker; everything from that marker on becomes the
+overlay (`rootfs_data`) for configuration. With JFFS2 reserving blocks for
+garbage collection, an overlay of 256 KiB is practically full right after
+first boot; aim for 320 KiB or more.
 
-Check after a build (offsets for `tplink-v1` images: 512 B header, kernel,
-rootfs aligned to 64 KiB):
+Check after a build, straight from the image:
 
 ```sh
-D=build_dir/target-mips_24kc_musl/linux-ath79_tiny
-K=$(stat -c %s $D/tplink_tl-wr741-v1-kernel.bin)
-R=$(stat -c %s $D/root.squashfs)
-B=65536
-KS=$(( (512 + K + B - 1) / B * B ))
-BLK=$(( (KS + R + B - 1) / B ))
-echo "overlay: $(( (3997696 - BLK * B) / 1024 )) KiB, free in last block: $(( BLK * B - KS - R )) B"
+python3 - bin/targets/ath79/tiny/*tl-wr741-v1-squashfs-sysupgrade.bin <<'PY'
+import struct, sys
+b = open(sys.argv[1], 'rb').read()
+sq = b.find(b'hsqs'); end = sq + struct.unpack('<Q', b[sq+40:sq+48])[0]
+dc = b.rfind(b'\xde\xad\xc0\xde')
+print(f"overlay: {(3997696 - dc) // 1024} KiB, free before next block: {dc - end} B")
+PY
 ```
 
 ## Default LAN address
