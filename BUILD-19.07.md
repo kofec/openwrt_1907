@@ -9,8 +9,8 @@ Feeds (see `feeds.conf.default`):
 
 | Feed | Repository | Branch |
 |---|---|---|
-| packages | https://github.com/kofec/packages | `openwrt-19.07` |
-| luci | https://github.com/kofec/luci | `openwrt-19.07` |
+| packages | https://github.com/kofec/packages_1907 | `openwrt-19.07` |
+| luci | https://github.com/kofec/luci_1907 | `openwrt-19.07` |
 | routing | https://git.openwrt.org/feed/routing.git | `openwrt-19.07` |
 
 ## Build environment
