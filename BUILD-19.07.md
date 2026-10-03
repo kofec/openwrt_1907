@@ -69,6 +69,8 @@ selected in a full `.config` even after nothing needs them any more.
 - with [files-service-ap](#service-ap-fallback-files-service-ap) copied to
   `files/`: service AP fallback
 - no IPv6, no firewall/iptables, no dnsmasq, no ppp, no opkg
+- default lan address 192.168.2.1 (also failsafe), only after first boot
+  or factory reset - see below
 
 Space saving tricks used there:
 - `# CONFIG_IPV6 is not set`, `# CONFIG_KERNEL_IPV6 is not set`
@@ -109,6 +111,27 @@ KS=$(( (512 + K + B - 1) / B * B ))
 BLK=$(( (KS + R + B - 1) / B ))
 echo "overlay: $(( (3997696 - BLK * B) / 1024 )) KiB, free in last block: $(( BLK * B - KS - R )) B"
 ```
+
+## Default LAN address
+
+`config_generate` hardcodes 192.168.1.1. This tree carries the upstream
+option from 23.05 (`baf76634f3`): Image configuration -> Use preinit IP
+configuration as default LAN IP. It generates `/etc/board.d/99-lan-ip`,
+which puts the preinit address into `board.json`; `config_generate` uses
+it only when `/etc/config/network` does not exist, i.e. on first boot and
+after factory reset. Settings kept across sysupgrade are untouched.
+
+```
+CONFIG_IMAGEOPT=y
+CONFIG_PREINITOPT=y
+CONFIG_TARGET_PREINIT_IP="192.168.2.1"
+CONFIG_TARGET_PREINIT_BROADCAST="192.168.2.255"
+CONFIG_TARGET_DEFAULT_LAN_IP_FROM_PREINIT=y
+```
+
+The 19.07 `board_detect` only runs executable board.d scripts, so the
+generated file gets `chmod 0755` here (upstream checks `-s` instead).
+odhcpd serves DHCP on any static lan address (pool .100-.249).
 
 ## Service AP fallback (files-service-ap)
 
