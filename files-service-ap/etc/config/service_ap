@@ -1,0 +1,10 @@
+config service_ap 'main'
+	option enabled '1'
+	# seconds without uplink before the service AP comes up
+	option timeout '180'
+	# seconds the AP stays on after the last client leaves
+	option service_time '600'
+	option ssid 'OpenWrt-Service'
+	# set before building; empty = open AP
+	option key ''
+	option network 'lan'

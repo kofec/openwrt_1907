@@ -1,0 +1,143 @@
+# Building this 19.07 fork
+
+OpenWrt 19.07 is end of life. This fork keeps it buildable for old 4/32 MB
+devices (TL-WR740N, TL-WR741ND, TL-WR841N, RB433) with a few backports:
+kernel 4.14.336, WireGuard (`wireguard-linux-compat` 1.0.20220627),
+vxlan, newer odhcpd and cmake.
+
+Feeds (see `feeds.conf.default`):
+
+| Feed | Repository | Branch |
+|---|---|---|
+| packages | https://github.com/kofec/packages | `openwrt-19.07` |
+| luci | https://github.com/kofec/luci | `openwrt-19.07` |
+| routing | https://git.openwrt.org/feed/routing.git | `openwrt-19.07` |
+
+## Build environment
+
+19.07 expects a host toolchain of its era (gcc 7-9, python2), which
+current distributions no longer ship, so the build runs in an Alpine 3.12
+container described by [Containerfile-alpine](Containerfile-alpine).
+The container user `kofec` is created with `adduser -D`, which gives
+uid 1000 - the same uid as the first user on a typical Ubuntu host, so
+the mounted tree stays writable. Adjust the user name if yours is
+different.
+
+```sh
+docker build -t openwrt:alpine -f Containerfile-alpine .
+```
+
+## Build
+
+```sh
+git clone https://github.com/kofec/openwrt_1907.git
+cd openwrt_1907
+./scripts/feeds update -a
+./scripts/feeds install -a
+
+docker run --interactive --rm --tty --ulimit 'nofile=1024:262144' \
+  --volume "$(pwd):/workdir" --workdir '/workdir' openwrt:alpine /bin/bash
+
+# inside the container
+cp diffconfig_wr741ndv1_1907_dhcp_travelmate .config
+make defconfig
+make download
+make -j"$(nproc)"
+```
+
+Images land in `bin/targets/<board>/<subtarget>/`, e.g.
+`bin/targets/ath79/tiny/openwrt-ath79-tiny-tplink_tl-wr741-v1-squashfs-sysupgrade.bin`.
+
+Non-interactive variant:
+
+```sh
+docker run --rm --ulimit 'nofile=1024:262144' -v "$(pwd):/workdir" -w /workdir \
+  openwrt:alpine sh -c 'make defconfig && make -j"$(nproc)"'
+```
+
+Always start from a diffconfig (`cp diffconfig_... .config`), not from an
+old full `.config`: packages that were only pulled in as dependencies stay
+selected in a full `.config` even after nothing needs them any more.
+
+## Example: TL-WR741ND v1, 4 MB flash
+
+[diffconfig_wr741ndv1_1907_dhcp_travelmate](diffconfig_wr741ndv1_1907_dhcp_travelmate)
+- `ath79/tiny`, `tplink_tl-wr741-v1`
+- LuCI with statistics (collectd + rrdtool) and watchcat
+- WireGuard (`kmod-wireguard`, `wireguard-tools`, `luci-proto-wireguard`)
+- relayd, odhcpd as DHCP server, travelmate
+- with [files-service-ap](#service-ap-fallback-files-service-ap) copied to
+  `files/`: service AP fallback
+- no IPv6, no firewall/iptables, no dnsmasq, no ppp, no opkg
+
+Space saving tricks used there:
+- `# CONFIG_IPV6 is not set`, `# CONFIG_KERNEL_IPV6 is not set`
+- `CONFIG_STRIP_KERNEL_EXPORTS=y`
+- `# CONFIG_PACKAGE_uboot-envtools is not set` - TP-Link boards have no
+  U-Boot environment partition
+- `# CONFIG_SIGNED_PACKAGES is not set` - drops `usign` and
+  `openwrt-keyring`, useless without opkg
+- collectd in the packages fork no longer depends on `libip4tc` and
+  `libltdl`; nothing links them, and `libip4tc2` + `libxtables12` alone
+  were ~88 KB of compressed squashfs
+
+Result on TL-WR741ND v1: squashfs 2.40 MB -> 2.29 MB, overlay 320 KiB ->
+448 KiB, with travelmate and the service AP script included.
+
+### How much flash is left
+
+On 4 MB TP-Link devices the firmware partition is 3904 KiB. The squashfs
+rootfs is padded to a 64 KiB erase block and everything after it becomes
+the JFFS2 overlay (`rootfs_data`) for configuration. With JFFS2 reserving
+blocks for garbage collection, an overlay of 256 KiB is practically full
+right after first boot; aim for 320 KiB or more.
+
+Check after a build (offsets for `tplink-v1` images: 512 B header, kernel,
+rootfs aligned to 64 KiB):
+
+```sh
+D=build_dir/target-mips_24kc_musl/linux-ath79_tiny
+K=$(stat -c %s $D/tplink_tl-wr741-v1-kernel.bin)
+R=$(stat -c %s $D/root.squashfs)
+B=65536
+KS=$(( (512 + K + B - 1) / B * B ))
+BLK=$(( (KS + R + B - 1) / B ))
+echo "overlay: $(( (3997696 - BLK * B) / 1024 )) KiB, free in last block: $(( BLK * B - KS - R )) B"
+```
+
+## Service AP fallback (files-service-ap)
+
+A router that reaches the internet as a wifi client (STA, e.g. with
+travelmate or relayd) is unreachable once that network is gone or its
+password changes. [files-service-ap](files-service-ap) adds a small procd
+service that opens a service AP in that case:
+
+1. Every 10 s it pings the default gateway (only when a wifi STA interface
+   is configured at all).
+2. After `timeout` seconds (default 180) without a working uplink it stops
+   travelmate, disables all enabled STA interfaces and enables the
+   `wireless.service` AP on `lan`. The STA must go: an AP on the same radio
+   as an unconnected STA does not come up.
+3. odhcpd serves DHCP on `lan` (default for a static lan when dnsmasq is
+   not installed: `dhcp.odhcpd.maindhcp=1`, `dhcp.lan.dhcpv4=server`), so a
+   laptop or phone gets an address and can open LuCI / ssh on the lan IP.
+4. The AP stays on while a station is associated and `service_time`
+   seconds (default 600) after the last one leaves; then the STA
+   interfaces are restored and travelmate started again (if enabled).
+
+The disabled STA list is kept in `/etc/service_ap.sta`, so a reboot in
+service mode restores the clients first.
+
+To use it:
+
+```sh
+cp -r files-service-ap files
+vi files/etc/config/service_ap     # set ssid and key
+chmod 600 files/etc/config/service_ap
+```
+
+`/files` is in `.gitignore`, so the key stays out of git. With an empty
+`key` the service AP is open.
+
+The init script is enabled automatically at image build time
+(`/etc/rc.d/S99service_ap`). Logs: `logread -e service_ap`.

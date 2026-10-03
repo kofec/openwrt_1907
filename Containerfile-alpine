@@ -1,0 +1,59 @@
+FROM docker.io/alpine:3.12
+
+ENV GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+# setup proxy to acces to Debian repository
+ENV LC_CTYPE=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+
+WORKDIR /workdir
+
+RUN apk add --no-cache \
+    'argp-standalone' \
+    'asciidoc' \
+    'bash' \
+    'bc' \
+    'binutils' \
+    'bzip2' \
+    'cdrkit' \
+    'coreutils' \
+    'diffutils' \
+    'elfutils-dev' \
+    'findutils' \
+    'flex' \
+    'g++' \
+    'gawk' \
+    'gcc' \
+    'gettext' \
+    'git' \
+    'grep' \
+    'gzip' \
+    'intltool' \
+    'libxslt' \
+    'linux-headers' \
+    'make' \
+#    'musl-fts-dev' \
+    'musl-libintl' \
+    'musl-obstack-dev' \
+    'ncurses-dev' \
+    'openssl-dev' \
+    'patch' \
+    'perl' \
+    'python3-dev' \
+    'python2-dev' \
+    'rsync' \
+    'shadow' \
+    'tar' \
+    'unzip' \
+    'util-linux' \
+    'wget' \
+    'zlib-dev' \
+  && \
+  ln -s '/usr/lib/libncurses.so' '/usr/lib/libtinfo.so' && \
+  #addgroup 'Nokia' -g 55555 && \
+  # adduser -s '/bin/bash' -G 'Nokia' -D amk082
+  #useradd -m -u 61400216 -g 55555 -o -s /bin/bash amk082
+#RUN cp /root/.gitconfig /home/amk082/
+#RUN chown amk082:Nokia /home/amk082/.gitconfig
+
+USER kofec
