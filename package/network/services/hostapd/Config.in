@@ -76,3 +76,16 @@ config DRIVER_11AC_SUPPORT
 config DRIVER_11W_SUPPORT
 	bool
 	default n
+
+config WPA_WNM_AP
+	bool "Enable 802.11v BSS transition management in basic hostapd"
+	depends on PACKAGE_hostapd-basic || \
+		   PACKAGE_wpad-basic || \
+		   PACKAGE_wpad-basic-wolfssl
+	default n
+	help
+	  Builds the AP side of the basic variant with CONFIG_WNM, as the full
+	  variant already is. This adds the bss_transition option (UCI:
+	  ieee80211v + bss_transition) and the ubus method
+	  wnm_disassoc_imminent, used to steer clients to another AP.
+	  wpa_supplicant stays without WNM. Costs ~8 KB of squashfs.

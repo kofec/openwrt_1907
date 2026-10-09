@@ -62,9 +62,17 @@ selected in a full `.config` even after nothing needs them any more.
 ## Profiles: one per model, 4 MB flash / 32 MB RAM
 
 All `ath79/tiny` TP-Link boards share one package profile; the diffconfigs
-differ only in the device line (and the `_bonding` / `_vxlan` extras).
+differ only in the device line (and the `_bonding` / `_vxlan` extras;
+the six base profiles also have `CONFIG_WPA_WNM_AP=y`, the variants do not).
 
 - LuCI with statistics (collectd + rrdtool) and watchcat
+- 802.11v on the AP side (base profiles only): `CONFIG_WPA_WNM_AP=y` builds
+  `wpad-basic` with hostapd `CONFIG_WNM`, which gives the `bss_transition`
+  option and the ubus method `wnm_disassoc_imminent` for client steering.
+  ~8 KB of squashfs; on 19.07 it takes both `option ieee80211v '1'` and
+  `option bss_transition '1'` on the wifi-iface. Do not set them on an
+  image without it: on 24.10 `wpad-basic` the same option makes hostapd
+  reject the whole config and the radio stays down
 - WireGuard (`kmod-wireguard`, `wireguard-tools`, `luci-proto-wireguard`)
 - relayd, odhcpd as DHCP server, travelmate with its LuCI app
 - Wake-on-LAN (`etherwake`, `luci-app-wol`)

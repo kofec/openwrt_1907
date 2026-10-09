@@ -31,6 +31,7 @@ PKG_CONFIG_DEPENDS:= \
 	CONFIG_DRIVER_WEXT_SUPPORT \
 	CONFIG_DRIVER_11N_SUPPORT \
 	CONFIG_DRIVER_11AC_SUPPORT \
+	CONFIG_WPA_WNM_AP \
 
 EAPOL_TEST_PROVIDERS:=eapol-test eapol-test-openssl eapol-test-wolfssl
 
@@ -437,6 +438,9 @@ define Build/Configure
 	$(Build/Configure/rebuild)
 	$(if $(wildcard ./files/hostapd-$(CONFIG_VARIANT).config), \
 		$(CP) ./files/hostapd-$(CONFIG_VARIANT).config $(PKG_BUILD_DIR)/hostapd/.config \
+	)
+	$(if $(and $(CONFIG_WPA_WNM_AP),$(filter basic,$(CONFIG_VARIANT))), \
+		$(SED) 's/^#CONFIG_WNM=y$$$$/CONFIG_WNM=y/' $(PKG_BUILD_DIR)/hostapd/.config \
 	)
 	$(CP) ./files/wpa_supplicant-$(CONFIG_VARIANT).config $(PKG_BUILD_DIR)/wpa_supplicant/.config
 endef
